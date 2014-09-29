@@ -290,8 +290,12 @@ That's not brilliant, however the objects have captured better properties:
             return search_for_object(self, min_distance_index, topn=topn)
 
 
+Testing the levenshtein distance for our search:
+
     search_with_text(model, "Tangerine Thai", levenshtein= True, topn=5)
 
+
+And indeed we get some matching places:
 
 <div>
     <h2>Tangerine Thai</h2>
@@ -302,14 +306,7 @@ That's not brilliant, however the objects have captured better properties:
     <span style='color:#777:font-size:9px'>Categories: </span><span style='color:#333;font-size:13px'>thai</span>
     <p style='width:450px'>review ... ? seattle , wa this is a cute little spot on phinney , with a great wall that completely opens up on nice days . the food is</p>
 </div>
-
-
-
 <small>1796</small>
-
-
-
-
 <div>
     <h2>Mae Ploy Thai Cuisine</h2>
     <span style='color: #ca0814;'>$$</span><span style='color: #e4e4e4;'>$</span><br /> 
@@ -319,14 +316,7 @@ That's not brilliant, however the objects have captured better properties:
     <span style='color:#777:font-size:9px'>Categories: </span><span style='color:#333;font-size:13px'>thai</span>
     <p style='width:450px'>the fried tofu was perfect as well . '' '' the curry was spicy and full of vegetables . '' '' the staff is always very nice and recognize me</p>
 </div>
-
-
-
 <small>1911</small>
-
-
-
-
 <div>
     <div style='background: rgb(221,222,223);width:102px;padding:1px;border-radius:2px'>
         <div style='height:20px; width:98px;padding-left:3px;background-color:rgb(71, 189, 249);font-size:9px;color:white'>
@@ -334,11 +324,6 @@ That's not brilliant, however the objects have captured better properties:
         </div>
     </div>
 </div>
-            
-
-
-
-
 <div>
     <h2>Pailin Thai Cuisine</h2>
     <span style='color: #ca0814;'>$$</span><span style='color: #e4e4e4;'>$</span><br /> 
@@ -348,14 +333,7 @@ That's not brilliant, however the objects have captured better properties:
     <span style='color:#777:font-size:9px'>Categories: </span><span style='color:#333;font-size:13px'>thai</span>
     <p style='width:450px'>k . '' love the fish tank , really cool to look at . '' '' i 'm kind of in a rut , since i usually get the phad</p>
 </div>
-
-
-
 <small>2055</small>
-
-
-
-
 <div>
     <div style='background: rgb(221,222,223);width:102px;padding:1px;border-radius:2px'>
         <div style='height:20px; width:98px;padding-left:3px;background-color:rgb(71, 189, 249);font-size:9px;color:white'>
@@ -363,11 +341,6 @@ That's not brilliant, however the objects have captured better properties:
         </div>
     </div>
 </div>
-        
-
-
-
-
 <div>
     <h2>Thailanding On Alki</h2>
     <span style='color: #ca0814;'>$$</span><span style='color: #e4e4e4;'>$</span><br /> 
@@ -377,12 +350,7 @@ That's not brilliant, however the objects have captured better properties:
     <span style='color:#777:font-size:9px'>Categories: </span><span style='color:#333;font-size:13px'>thai</span>
     <p style='width:450px'>of all the service was amazing ! ! ! they genuinely cared if we liked the food or not . second , the food was great . i had the</p>
 </div>
-
-
-
 <small>2030</small>
-
-
 <div>
     <div style='background: rgb(221,222,223);width:102px;padding:1px;border-radius:2px'>
         <div style='height:20px; width:98px;padding-left:3px;background-color:rgb(71, 189, 249);font-size:9px;color:white'>
@@ -390,11 +358,6 @@ That's not brilliant, however the objects have captured better properties:
         </div>
     </div>
 </div>
-            
-
-
-
-
 <div>
     <h2>Ying Thai Kitchen</h2>
     <span style='color: #ca0814;'>$$</span><span style='color: #e4e4e4;'>$</span><br /> 
@@ -404,14 +367,7 @@ That's not brilliant, however the objects have captured better properties:
     <span style='color:#777:font-size:9px'>Categories: </span><span style='color:#333;font-size:13px'>thai</span>
     <p style='width:450px'>. they are very happy about this place 's food which means good sign ! was this review ... ? seattle , wa i had not had thai food in</p>
 </div>
-
-
-
 <small>1928</small>
-
-
-
-
 <div>
     <div style='background: rgb(221,222,223);width:102px;padding:1px;border-radius:2px'>
         <div style='height:20px; width:97px;padding-left:3px;background-color:rgb(71, 189, 249);font-size:9px;color:white'>
@@ -419,11 +375,6 @@ That's not brilliant, however the objects have captured better properties:
         </div>
     </div>
 </div>
-            
-
-
-
-
 <div>
     <h2>Royal Palm Thai Restaurant</h2>
     <span style='color: #ca0814;'>$$</span><span style='color: #e4e4e4;'>$</span><br /> 
@@ -433,14 +384,7 @@ That's not brilliant, however the objects have captured better properties:
     <span style='color:#777:font-size:9px'>Categories: </span><span style='color:#333;font-size:13px'>thai</span>
     <p style='width:450px'>driving as i wanted to try a different place . i ordered the 4 star out of 5 , gluten-free , gang ped ( red curry , duck , pineapple</p>
 </div>
-
-
-
 <small>1949</small>
-
-
-
-
 <div>
     <div style='background: rgb(221,222,223);width:102px;padding:1px;border-radius:2px'>
         <div style='height:20px; width:97px;padding-left:3px;background-color:rgb(71, 189, 249);font-size:9px;color:white'>
@@ -448,20 +392,17 @@ That's not brilliant, however the objects have captured better properties:
         </div>
     </div>
 </div>
-            
-
+        
+With some spelling mistakes:
 
 
     search_with_text(model, "burgez", levenshtein= True, topn=5)
 
 
+We still get a correction and a result:
 
 <span style="color: #333">Did you mean </span> <b>burger</b> <span style="color: #333">(1 edit)</span> ?
             
-
-
-
-
 <div>
     <h2>burger-king-seattle-6</h2>
     <span style='color: #ca0814;'>$</span><span style='color: #e4e4e4;'>$$</span><br /> 
