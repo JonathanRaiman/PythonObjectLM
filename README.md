@@ -5,7 +5,6 @@ A language model for documents and words. This simple language model takes a sup
 
 Eucledian distances between documents are observed to possess fuzzy search properties over all the labels.
 
-
 ## Custom Language Model
 
 Here we initialize a model that uses the vectors for the words in a window and a special object vector corresponding to the document (restaurant) to perform classification. By gradient descent we can then update the word vectors and the object vectors so that the object vectors obtain some relation to the labels / targets provided to us (in this case the Yelp category, pricing, and rating labels).
@@ -412,3 +411,9 @@ We still get a correction and a result:
     <span style='color:#777:font-size:9px'>Categories: </span><span style='color:#333;font-size:13px'>burgers, hotdogs</span>
     <p style='width:450px'>lunch . i met with two other people here during the rush and i 'm surprised that all of us made it out alive as first-timers . i had a</p>
 </div>
+
+
+### Dependencies
+
+You will probably want the [xml_cleaner](https://github.com/JonathanRaiman/xml_cleaner) for cleaning up text if you want to easily process weirdly formatted inputs.
+
