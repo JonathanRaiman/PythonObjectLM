@@ -25,6 +25,10 @@
 *.gem
 *.pem
 
+test-output
+
+.ipynb_checkpoints
+
 # Logs and databases #
 ######################
 *.log

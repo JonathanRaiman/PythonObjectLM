@@ -365,14 +365,14 @@ class ObjectLM(object):
         return result[:topn]
 
     def most_similar_object(self, object_index, topn = 20):
-        if object_index is np.ndarray or list:
+        if type(object_index) is np.ndarray or type(object_index) is list:
             object = object_index
         else:
             object = self.norm_object_matrix[object_index]
             topn = topn + 1
         dists = np.dot(self.norm_object_matrix, object).astype(REAL)
         best = np.argsort(dists)[::-1][:topn]
-        if object_index is np.ndarray or list:
+        if type(object_index) is np.ndarray or type(object_index) is list:
             result = [(sim, float(dists[sim])) for sim in best]
         else:
             result = [(sim, float(dists[sim])) for sim in best if sim != object_index]
