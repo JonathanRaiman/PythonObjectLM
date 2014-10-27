@@ -416,4 +416,11 @@ We still get a correction and a result:
 ### Dependencies
 
 You will probably want the [xml_cleaner](https://github.com/JonathanRaiman/xml_cleaner) for cleaning up text if you want to easily process weirdly formatted inputs.
+Easy to get:
 
+    pip3 install xml_cleaner
+
+
+### Creating trees
+
+We can see infer new properties on restaurants given a tree from this compression model [here](http://nbviewer.ipython.org/github/JonathanRaiman/PythonObjectLM/blob/master/Covariance%20over%20a%20tree.ipynb).
