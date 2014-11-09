@@ -424,3 +424,5 @@ Easy to get:
 ### Creating trees
 
 We can see infer new properties on restaurants given a tree from this compression model [here](http://nbviewer.ipython.org/github/JonathanRaiman/PythonObjectLM/blob/master/Covariance%20over%20a%20tree.ipynb).
+
+And on a real dataset we can see [results here](http://nbviewer.ipython.org/github/JonathanRaiman/PythonObjectLM/blob/master/Covariance%20over%20Yelp%20Dataset.ipynb).
