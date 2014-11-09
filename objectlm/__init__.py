@@ -8,6 +8,8 @@ from queue import Queue
 from numpy import float32 as REAL, int32 as INT
 logger = logging.getLogger("objectlm.training")
 
+from .hierarchical_observation import HierarchicalObservation
+
 def bilinear_form(tensor, x):
     """
     Bilinear form like:
@@ -356,22 +358,36 @@ class ObjectLM(object):
         self.norm_model_matrix = (self.model_matrix.get_value(borrow=True) / np.sqrt((self.model_matrix.get_value(borrow=True) ** 2).sum(-1))[..., np.newaxis]).astype(REAL)
         self.norm_object_matrix = (self.object_matrix.get_value(borrow=True) / np.sqrt((self.object_matrix.get_value(borrow=True) ** 2).sum(-1))[..., np.newaxis]).astype(REAL)
 
-    def most_similar_word(self, word, topn = 10):
+    def most_similar_word(self, word, topn = 10, metric='euclidean'):
+        """
+        Use different distance to find the closest word to a query word
+
+        """
         index = self.vocab.get_index(word)
-        word = self.norm_model_matrix[index]
-        dists = np.dot(self.norm_model_matrix, word).astype(REAL)
-        best = np.argsort(dists)[::-1][:topn + 1]
+        matrix = self.norm_model_matrix if metric != 'euclidean' else self.model_matrix.get_value(borrow=True)
+        word = matrix[index]
+        if metric =='euclidean':
+            dists = np.linalg.norm((matrix - word), axis=1)
+            best = np.argsort(dists)[:topn + 1]
+        else:
+            dists = np.dot(matrix, word).astype(REAL)
+            best = np.argsort(dists)[::-1][:topn + 1]
         result = [(self.vocab.index2word[sim], float(dists[sim]), sim) for sim in best if sim != index]
         return result[:topn]
 
-    def most_similar_object(self, object_index, topn = 20):
+    def most_similar_object(self, object_index, topn = 20, metric='euclidean'):
+        matrix = self.norm_object_matrix if metric != 'euclidean' else self.object_matrix.get_value(borrow=True)
         if type(object_index) is np.ndarray or type(object_index) is list:
             object = object_index
         else:
-            object = self.norm_object_matrix[object_index]
+            object = matrix[object_index]
             topn = topn + 1
-        dists = np.dot(self.norm_object_matrix, object).astype(REAL)
-        best = np.argsort(dists)[::-1][:topn]
+        if metric == 'euclidean':
+            dists = np.linalg.norm((matrix - object), axis=1)
+            best = np.argsort(dists)[:topn]
+        else:
+            dists = np.dot(matrix, object).astype(REAL)
+            best = np.argsort(dists)[::-1][:topn]
         if type(object_index) is np.ndarray or type(object_index) is list:
             result = [(sim, float(dists[sim])) for sim in best]
         else:
@@ -590,3 +606,5 @@ class DatasetGenerator():
                    i,
                    self.convert_datum_to_classes(self.texts_data[i]),
                    self.category_converter.convert_categories_to_label(self.texts_data[i]["categories"])))
+
+__all__ = ["HierarchicalObservation", "ObjectLM", "CategoriesConverter", "DatasetGenerator"]

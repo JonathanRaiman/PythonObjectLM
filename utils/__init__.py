@@ -3,6 +3,7 @@ import re
 from xml_cleaner import to_raw_text
 from pymongo import MongoClient
 from math import ceil
+import numpy as np
 
 mongo_database_global = None
 mongo_client_global   = None
@@ -62,6 +63,58 @@ def get_some_restaurants(num = 1000, collection_name = "restaurants", min_words 
 
 def rating_to_string(rating):
     return "" + (int(rating) * "★")
+
+def get_adjacency_matrix(nodes):
+    adj = np.zeros([len(nodes), len(nodes)], dtype=np.float32)
+    for node in nodes:
+        if node.left != None:
+            adj[node.id, node.left.id] = 1. - node.dist
+            adj[node.left.id, node.id] = 1. - node.dist
+            adj[node.id, node.right.id] = 1. - node.dist
+            adj[node.right.id, node.id] = 1. - node.dist
+    return adj
+
+def assign_parents(node):
+    if not hasattr(node, 'parent'):
+        node.parent = None
+    if node.left != None:
+        node.left.parent = node
+        assign_parents(node.left)
+        node.right.parent = node
+        assign_parents(node.right)
+            
+def get_degree_matrix(nodes):
+    deg = np.zeros(len(nodes), dtype=np.float32)
+    for node in nodes:
+        if node.left != None:
+            deg[node.id] += (1. - node.dist) * 2
+            deg[node.left.id] += 1. - node.dist
+            deg[node.right.id] += 1. - node.dist
+    return deg
+
+def norm_pdf(y, cov, inv = True):
+    if inv:
+        return np.exp(-0.5 * np.dot(np.dot(y.T, np.linalg.inv(cov)),y))
+    else:
+        return np.exp(-0.5 * np.dot(np.dot(y.T, cov),y))
+    
+def entropy(p_x):
+    """
+    Entropy:
+    H(p_x) = - sum p_x * log(p_x)
+    
+    Inputs
+    ------
+    
+    p_x ndarray : the probability distribution
+    
+    Outputs
+    -------
+    
+    entropy float : the entropy of the distribution
+    """
+    return (-p_x * np.log(p_x)).sum() 
+
 
 def present_restaurant(restaurant, text=None):
     if text is None:
