@@ -1,0 +1,84 @@
+<html>
+<!--
+
+This is a form taken from the example given [here](http://awsmedia.s3.amazonaws.com/catalog/attachments/examplejavascriptexternalquestion.html)
+
+-->
+	<head>
+		<title>Recommend a restaurant to a friend</title>
+		<script type="text/javascript" language="javaScript">
+			{javascript}
+		</script>
+		<style>
+			{style_code}
+		</style>
+	</head>
+	<body onload="populateAssignmentID('myAssignmentId')">
+		<h1>Recommend a restaurant to a friend</h1>
+		<div class="overview">
+			<form action="http://www.mturk.com/mturk/externalSubmit" method="POST">
+				<div class="row">
+					<div class="instructions">
+						<h2>Instructions</h2>
+						<p>We want to find the best restaurant to recommend to a friend given that he likes 3 others. Below are the reviews for the 3 restaurant this friend likes, please recommend another from the second list of 3 restaurants below that.</p>
+						<p>Here are the 3 restaurants this friend <b>likes</b> : </p>
+					</div>
+				</div>
+				{examples}
+				<div class="row">
+					<hr/>
+					<div class="instructions">
+						Among the following <b>3 restaurants</b>, which would you recommend most to your friend:
+					</div>
+				</div>
+				{options}
+				<div class="questions">
+					<div class="row border-top">
+						<div class="col_4">
+							<label for="recommendation_select">
+								Which restaurant would you recommend ?
+							</label>
+						</div>
+						<div class="col_8">
+							<select name="recommendation" id="recommendation_select">
+								{restaurant_options}
+							</select>
+						</div>
+					</div>
+					<div class="row border-top">
+						<div class="col_4">
+							<label for="explanation_select">
+								What's the <b>main reason</b> for your recommendation ?
+							</label>
+						</div>
+						<div class="col_8">
+							<select name="explanation" id="explanation_select">
+								<option value="cuisine">Cuisine</option>
+								<option value="price">Price</option>
+								<option value="rating">Rating</option>
+								<option value="style">Style</option>
+							</select>
+						</div>
+					</div>
+					<div class="row border-top">
+						<div class="col_4">
+							<label for="explanation_comments">
+								In a sentence please briefly explain your friend the <b>reason for your choice</b>.
+							</label>
+						</div>
+						<div class="col_8">
+							<textarea rows="2" id="explanation_comments" name="explanation_comments" placeholder="I recommend "></textarea>
+						</div>
+					</div>
+					<input type="hidden" name="personality_type" value="{personality_type}" />
+					<input type="hidden" name="difficulty" value="{difficulty}" />
+					<input type="hidden" name="input_restaurants" value="{input_restaurants}" />
+					<input type="hidden" name="assignmentId" id="myAssignmentId" value="" />
+					<div class="row border-top" id="unsure_if_answerable">
+						<input class='btn btn-default' type="submit" name="submit" id="submit_answer" value="Submit Answer" />
+					</div>
+				</div>
+			</form>
+		</div>
+	</body>
+</html>

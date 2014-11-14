@@ -18,6 +18,11 @@ def connect_to_database(database_name='test'):
     if not mongo_client_global:
         get_mongo_client()
     mongo_database_global = mongo_client_global[database_name]
+    return mongo_database_global
+
+def get_database():
+    global mongo_database_global
+    return mongo_database_global
 
 class NotConnectedError(Exception):
     def __init__(self, message):
