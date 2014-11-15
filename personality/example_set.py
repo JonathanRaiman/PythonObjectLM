@@ -2,6 +2,7 @@ from utils import rating_to_string
 import requests, pickle, gzip
 from io import BytesIO
 from lxml import html, etree
+from .mtc import get_responses_for_hit
 
 PAGES = {}
 
@@ -100,6 +101,12 @@ class ExampleSet():
         else:
             self.examples = [self.scrape_restaurant_data(example) for example in examples]
             self.options = [self.scrape_restaurant_data(option) for option in options]
+
+    def get_responses(self, mtc):
+        if hasattr(self, 'HITId'):
+            return get_responses_for_hit(mtc, self.HITId)
+        else:
+            raise BaseException("No HITId for this ExampleSet")
         
     def scrape_restaurant_data(self, example):
         # get this from yelp

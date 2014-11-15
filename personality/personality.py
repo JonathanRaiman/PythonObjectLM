@@ -1,7 +1,13 @@
 import random 
 from utils import connect_to_database
+from pymongo.errors import ConnectionFailure
+from warnings import warn
 
-DB = connect_to_database(database_name = "yelp")
+try:
+    DB = connect_to_database(database_name = "yelp")
+except ConnectionFailure as e:
+    warn("Could not connect to MongoDB database `yelp`")
+    DB = None
 
 class Personality:
     def __init__(self, good_requirement, collection_name = "restaurants"):
