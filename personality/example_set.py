@@ -104,7 +104,7 @@ class ExampleSet():
 
     def get_responses(self, mtc):
         if hasattr(self, 'HITId'):
-            return get_responses_for_hit(mtc, self.HITId)
+            return [response for hitid in self.HITId for response in get_responses_for_hit(mtc, hitid)]
         else:
             raise BaseException("No HITId for this ExampleSet")
         

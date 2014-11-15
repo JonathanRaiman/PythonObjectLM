@@ -18,13 +18,13 @@ def create_mtc_question(mtc,
     duration = datetime.timedelta(0,1500),
     reward = 0.5,
     max_assignments = 3,
-    title = 'Help recommend a restaurant to a friend.'):
+    title = 'Help recommend a restaurant to a friend.',
+    redo = False):
 
-    if hasattr(exampleset, "HITId"):
+    if not redo and hasattr(exampleset, "HITId"):
         warn("ExampleSet was already submitted")
         return None
     else:
-
         description = ('Read short snippets about places someone liked'
                        '  or disliked, and choose among a list which corresponds best')
         keywords = 'rating, opinions, recommendation'
@@ -49,8 +49,10 @@ def create_mtc_question(mtc,
                    keywords=keywords,
                    duration = duration,
                    reward=reward)
-
-        exampleset.HITId = hit[0].HITId
+        if not hasattr(exampleset, "HITId"):
+            exampleset.HITId = []
+        else:
+            exampleset.HITId.append(hit[0].HITId)
         return hit
 
 def get_responses_for_hit(mtc, HITId):
