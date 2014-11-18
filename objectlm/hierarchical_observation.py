@@ -30,14 +30,22 @@ class HierarchicalObservation:
             np.ones(len(positive)) * 0.5, 
             np.ones(len(negative)) * -0.5]))
     
-    def _calculate_conditional_probabilities(self, y, indices, remaining_indices):
+    def _calculate_conditional_probabilities(self, y, indices, remaining_indices, singular=False):
         assert len(y) == len(indices), "Not the same observation length as indices"
         probs = np.zeros([len(remaining_indices), 2])
-        for k, unseen_index in enumerate(remaining_indices):
-            probs[k, 0] = norm_pdf(np.concatenate([y, [0.5]]),
-                     self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]])
-            probs[k, 1] = norm_pdf(np.concatenate([y, [-0.5]]),
-                     self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]])
+        if singular:
+          diagonal_noise = np.eye(len(indices) + 1) * 1e-6
+          for k, unseen_index in enumerate(remaining_indices):
+              probs[k, 0] = norm_pdf(np.concatenate([y, [0.5]]),
+                       self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]] + diagonal_noise)
+              probs[k, 1] = norm_pdf(np.concatenate([y, [-0.5]]),
+                       self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]] + diagonal_noise)
+        else:
+          for k, unseen_index in enumerate(remaining_indices):
+              probs[k, 0] = norm_pdf(np.concatenate([y, [0.5]]),
+                       self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]])
+              probs[k, 1] = norm_pdf(np.concatenate([y, [-0.5]]),
+                       self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]])
         # marginalize probabilities
 
         return (probs.T / probs.sum(axis=1)).T
@@ -101,6 +109,7 @@ class HierarchicalObservation:
                                   sigma = None,
                                   num_steps = 50,
                                   num_trials = 100,
+                                  singular = False,
                                   approximate = True):
         """
         Take labels as observations being positive or negative
@@ -130,7 +139,7 @@ class HierarchicalObservation:
             
         """
         indices, y = self.observation_vector(positive,negative)
-        probs = self._calculate_conditional_probabilities(y, indices, remaining_indices)
+        probs = self._calculate_conditional_probabilities(y, indices, remaining_indices, singular)
         
         return (remaining_indices, probs)
     
