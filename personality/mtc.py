@@ -1,5 +1,6 @@
 import datetime
 from boto.mturk.question import HTMLQuestion 
+from boto.mturk.connection import MTurkRequestError
 from warnings import warn
 
 def convert_to_select_options(options):
@@ -57,10 +58,21 @@ def create_mtc_question(mtc,
 
 def get_responses_for_hit(mtc, HITId):
     hit_response = []
-    assignments = mtc.get_assignments(HITId)
+    if type(mtc) is list:
+        for mtcs in mtc:
+            try:
+                assignments = mtcs.get_assignments(HITId)
+                break
+            except MTurkRequestError:
+                continue
+    else:
+        assignments = mtc.get_assignments(HITId)
     for assignment in assignments:
         # worker = assignment.WorkerId
         hit_worker_response = {question_form_answer.qid: question_form_answer.fields[0] for answer in assignment.answers for question_form_answer in answer if question_form_answer.qid != "submit"}
+        hit_worker_response['ApprovalTime'] = assignment.ApprovalTime if hasattr(assignment, 'ApprovalTime') else None
+        hit_worker_response['RejectionTime'] = assignment.RejectionTime if hasattr(assignment, 'RejectionTime') else None
+        hit_worker_response["WorkerId"] = assignment.WorkerId
         hit_worker_response["HITId"] = HITId
         hit_response.append(hit_worker_response)
     return hit_response

@@ -51,6 +51,19 @@ cdef REAL_t[EXP_TABLE_SIZE] EXP_TABLE
 cdef char trans  = 'T'
 cdef char transN = 'N'
 
+cdef void _quadratic_form_cython_single_ptr(REAL_t* tensor, 
+    int tensor_shape_0,
+    int tensor_shape_2,
+    REAL_t * obs_ptr,
+    REAL_t * intermediary_result,
+    REAL_t * final_result) nogil:
+    cdef int i
+    for i in range(tensor_shape_0):
+        matrix_vector_product(&trans, &tensor_shape_2, &tensor_shape_2, &tensor[i * tensor_shape_2 * tensor_shape_2], obs_ptr, &intermediary_result[i * tensor_shape_2])
+    for i in range(tensor_shape_0):
+        matrix_vector_product_additive(&trans, &ONE, &tensor_shape_2, &intermediary_result[i * tensor_shape_2], obs_ptr, &final_result[i])
+
+
 def init():
     """
     Precompute function `sigmoid(x) = 1 / (1 + exp(-x))`, for x values discretized
@@ -90,6 +103,9 @@ cdef void add_vector_alpha(REAL_t * alpha, REAL_t *source, int *copy_size, REAL_
     
 cdef void matrix_vector_product(char * tranposed, int *M, int *N, REAL_t *matrix, REAL_t *vector, REAL_t* destination) nogil:
     sgemv(tranposed, N, M, &ONEF, matrix, N, vector, &ONE, &ZEROF, destination, &ONE)
+
+cdef void matrix_vector_product_additive(char * tranposed, int *M, int *N, REAL_t *matrix, REAL_t *vector, REAL_t* destination) nogil:
+    sgemv(tranposed, N, M, &ONEF, matrix, N, vector, &ONE, &ONEF, destination, &ONE)
 
 def matrix_product(A, B):
     cdef int M = A.shape[0]
@@ -169,7 +185,8 @@ def train_sentence_concatenation(model,
     _sigmoid_target,
     REAL_t alpha,
     _distribution_work,
-    _observation_work):
+    _observation_work,
+    _composition_work):
     """
     Train the model using a block of text represented
     by indices to make predictions over multimodal and
@@ -199,15 +216,18 @@ def train_sentence_concatenation(model,
     cdef int size                  = model.size
     cdef int object_size           = model.object_size
     cdef int window                = model.window
+    cdef bint bilinear_form        = model.bilinear_form
 
     # theano variables (with underlying numpy matrices)
     cdef REAL_t *projection_matrix = <REAL_t *>(np.PyArray_DATA(model.projection_matrix.get_value(borrow=True)))
+    cdef REAL_t *composition_matrix # only used in bilinear case.
     cdef REAL_t *bias_vector       = <REAL_t *>(np.PyArray_DATA(model.bias_vector.get_value(borrow=True)))
     cdef REAL_t *model_matrix      = <REAL_t *>(np.PyArray_DATA(model.model_matrix.get_value(borrow=True)))
     cdef REAL_t *object_matrix     = <REAL_t *>(np.PyArray_DATA(model.object_matrix.get_value(borrow=True)))
 
     cdef REAL_t *distribution_work = <REAL_t *>(np.PyArray_DATA(_distribution_work))
     cdef REAL_t *observation_work  = <REAL_t *>(np.PyArray_DATA(_observation_work))
+    cdef REAL_t *composition_work  # only used in bilinear case.
 
     # observation parameters:
     cdef int observation_size    = window * size + object_size
@@ -227,29 +247,58 @@ def train_sentence_concatenation(model,
     cdef INT_t * sigmoid_target = <INT_t *>(np.PyArray_DATA(_sigmoid_target))
     cdef int     text_len       = np.PyArray_DIM(_indices, 0)
     cdef double error = 0.0
-    
+
+    if bilinear_form:
+        composition_matrix = <REAL_t *>(np.PyArray_DATA(model.composition_matrix.get_value(borrow=True)))
+        composition_work   = <REAL_t *>(np.PyArray_DATA(_composition_work))
+
     with nogil:
-        for i in range(text_len+1-window):
-            error += train_sentence_concatenation_window(
-                &alpha,
-                projection_matrix,
-                bias_vector,
-                model_matrix,
-                object_matrix,
-                observation_work,
-                distribution_work,
-                distribution_sizes,
-                softmax_target,
-                sigmoid_target,
-                &softmax_target_size,
-                &num_softmax_classes,
-                &num_sigmoid_classes,
-                &observation_size,
-                &size,
-                &object_size,
-                &window,
-                &indices[i],
-                &object_index)
+        if bilinear_form:
+            for i in range(text_len+1-window):
+                error += train_sentence_concatenation_window_bilinear(
+                    &alpha,
+                    projection_matrix,
+                    composition_matrix,
+                    bias_vector,
+                    model_matrix,
+                    object_matrix,
+                    observation_work,
+                    distribution_work,
+                    composition_work,
+                    distribution_sizes,
+                    softmax_target,
+                    sigmoid_target,
+                    &softmax_target_size,
+                    &num_softmax_classes,
+                    &num_sigmoid_classes,
+                    &observation_size,
+                    &size,
+                    &object_size,
+                    &window,
+                    &indices[i],
+                    &object_index)
+        else:
+            for i in range(text_len+1-window):
+                error += train_sentence_concatenation_window(
+                    &alpha,
+                    projection_matrix,
+                    bias_vector,
+                    model_matrix,
+                    object_matrix,
+                    observation_work,
+                    distribution_work,
+                    distribution_sizes,
+                    softmax_target,
+                    sigmoid_target,
+                    &softmax_target_size,
+                    &num_softmax_classes,
+                    &num_sigmoid_classes,
+                    &observation_size,
+                    &size,
+                    &object_size,
+                    &window,
+                    &indices[i],
+                    &object_index)
     return error
 
 cdef void create_observation_vector(
@@ -269,6 +318,51 @@ cdef void create_observation_vector(
        
     # we also copy the object vector:
     copy_vector(&object_matrix[object_index[0] * object_size[0]], object_size, &work[window[0] * size[0]])
+
+cdef void make_prediction_bilinear(
+    int * observation_size,
+    int * target_size,
+    LABEL_INT *distribution_sizes,
+    INT_t * softmax_target,
+    INT_t * sigmoid_target,
+    int * num_softmax_classes,
+    int * num_sigmoid_classes,
+    REAL_t *projection_matrix,
+    REAL_t *composition_matrix,
+    REAL_t *composition_work,
+    REAL_t *bias_vector,
+    REAL_t *observation,
+    REAL_t *output,
+    REAL_t *error) nogil:
+
+    # multiply with vectors to get projection:
+    matrix_vector_product(&trans, target_size, observation_size, projection_matrix, observation, output)
+
+    _quadratic_form_cython_single_ptr(composition_matrix, target_size[0], observation_size[0], observation, composition_work, output)
+
+    # add the bias vector
+    add_vector(bias_vector, target_size, output)
+
+    # softmax and sigmoid output:
+    cdef Py_ssize_t i
+    cdef int class_offset = 0
+    
+    # for all softmax classes:
+    for i in range(0, num_softmax_classes[0]):
+        softmax(&output[class_offset], &distribution_sizes[i], &output[class_offset])
+        if output[class_offset + softmax_target[i]] > SMALL_NUM:
+            error[0] += softmax_error(&softmax_target[i], &output[class_offset])
+        class_offset += distribution_sizes[i]
+
+    # for all sigmoid classes:
+    for i in range(0, num_sigmoid_classes[0]):
+        if output[class_offset + i] > -MAX_EXP and output[class_offset + i] < MAX_EXP:
+            output[class_offset + i] = sigmoid(output[class_offset + i])
+            error[0] += binary_crossentropy_error(sigmoid_target[i], output[class_offset + i])
+        else:
+            # error will cause craziness to ensue.
+            output[class_offset + i] = sigmoid(output[class_offset + i])
+    
 
 cdef void make_prediction(
     int * observation_size,
@@ -309,6 +403,43 @@ cdef void make_prediction(
         else:
             # error will cause craziness to ensue.
             output[class_offset + i] = sigmoid(output[class_offset + i])
+
+cdef void make_prediction_no_error_bilinear(
+    int * observation_size,
+    int * target_size,
+    LABEL_INT *distribution_sizes,
+    int * num_softmax_classes,
+    int * num_sigmoid_classes,
+    REAL_t *projection_matrix,
+    REAL_t *composition_matrix,
+    REAL_t *composition_work,
+    REAL_t *bias_vector,
+    REAL_t *observation,
+    REAL_t *output) nogil:
+
+    # multiply with vectors to get projection:
+    matrix_vector_product(&trans, target_size, observation_size, projection_matrix, observation, output)
+
+    # we may be concerned that composition_work is not erased, but in fact the first operation
+    # in the quadratic form is destructive over this area of memory, so previous passes don't
+    # affect this calculation:
+    _quadratic_form_cython_single_ptr(composition_matrix, target_size[0], observation_size[0], observation, composition_work, output)
+
+    # add the bias vector
+    add_vector(bias_vector, target_size, output)
+
+    # softmax and sigmoid output:
+    cdef Py_ssize_t i
+    cdef int  class_offset = 0
+    
+    # for all softmax classes:
+    for i in range(0, num_softmax_classes[0]):
+        softmax(&output[class_offset], &distribution_sizes[i], &output[class_offset])
+        class_offset += distribution_sizes[i]
+
+    # for all sigmoid classes:
+    for i in range(0, num_sigmoid_classes[0]):
+        output[class_offset + i] = sigmoid(output[class_offset + i])
 
 cdef void make_prediction_no_error(
     int * observation_size,
@@ -385,6 +516,50 @@ cdef void update_bias_vector(
 
     saxpy(target_size, &neg_alpha, delta_class, &ONE, bias_vector, &ONE)
 
+cdef void update_composition_matrix(
+    int * observation_size,
+    int * target_size,
+    REAL_t * composition_matrix,
+    REAL_t * alpha,
+    REAL_t * observation,
+    REAL_t * composition_work,
+    REAL_t * delta_class
+    ) nogil:
+    cdef float neg_alpha = -alpha[0]
+    cdef float multiplier
+    cdef int i
+    cdef int comp_slice_size = observation_size[0] * observation_size[0]
+
+    memset(composition_work, 0, comp_slice_size * cython.sizeof(REAL_t))
+    outer_product_alpha(&neg_alpha, observation_size, observation, observation_size, observation, composition_work)
+
+    for i in range(target_size[0]):
+        saxpy(&comp_slice_size, &delta_class[i], composition_work, &ONE, &composition_matrix[i * comp_slice_size], &ONE)
+
+cdef void tensor_delta_down(
+    int * target_size,
+    int * observation_size,
+    REAL_t * composition_matrix,
+    REAL_t * delta_class,
+    REAL_t * observation,
+    REAL_t * outer_dotted) nogil:
+
+    cdef int i
+    cdef int comp_slice_size = observation_size[0] * observation_size[0]
+
+    # the outer_dotted pointer is large matrix
+    # used for storing intermediary updates necessary for the bilinear form.
+    outer_product_alpha(&ONEF, target_size, delta_class, observation_size, observation, outer_dotted)
+
+    # we initially use the observation to get the dot product
+    # above, then we erase this observation and re-use it to perform
+    # updates:
+    memset(observation, 0, observation_size[0] * cython.sizeof(REAL_t))
+
+    for i in range(target_size[0]):
+        matrix_vector_product_additive(&transN, observation_size, observation_size, &composition_matrix[i * comp_slice_size], &outer_dotted[i * observation_size[0]], observation)
+        matrix_vector_product_additive(&trans, observation_size, observation_size, &composition_matrix[i * comp_slice_size], &outer_dotted[i * observation_size[0]], observation)
+
 cdef void update_projection_matrix(
     int * observation_size,
     int * target_size,
@@ -433,6 +608,45 @@ cdef void update_language_model(
     # copy the object vector over
     add_vector_alpha(&neg_alpha, &work[window[0] * size[0]], object_size, &object_matrix[object_index[0] * object_size[0]])
 
+cdef void update_language_model_bilinear(
+    int * observation_size,
+    int * target_size,
+    int * size,
+    int * object_size,
+    int * window,
+    INT_t * indices,
+    int * object_index,
+    REAL_t * projection_matrix,
+    REAL_t * composition_matrix,
+    REAL_t * model_matrix,
+    REAL_t * object_matrix,
+    REAL_t * alpha,
+    REAL_t * delta_class,
+    REAL_t * composition_work,
+    REAL_t * observation) nogil:
+
+    cdef REAL_t neg_alpha = -alpha[0]
+    cdef Py_ssize_t i
+
+    # the composition_work is memory allocated for bilinear form
+    # intermediary calculations. here we erase it to store the
+    # outer product of the error signal with the observation:
+    memset(composition_work, 0, target_size[0] * observation_size[0] * cython.sizeof(REAL_t))
+
+    # observation is used first to backprop through the tensor, then
+    # erased and used to store updates to the language model:
+    tensor_delta_down(target_size, observation_size, composition_matrix, delta_class, observation, composition_work)
+
+    # obtain the projected version of the error in the observation space
+    matrix_vector_product_additive(&transN, target_size, observation_size, projection_matrix, delta_class, observation)
+    
+    # obtain the word vector updates:
+    for i in range(0, window[0]):
+        add_vector_alpha(&neg_alpha, &observation[i * size[0]], size, &model_matrix[indices[i] * size[0]])
+    
+    # copy the object vector over
+    add_vector_alpha(&neg_alpha, &observation[window[0] * size[0]], object_size, &object_matrix[object_index[0] * object_size[0]])
+
 def predict_sentence_window(model,
     _indices,
     int object_index):
@@ -441,9 +655,11 @@ def predict_sentence_window(model,
     cdef int size                  = model.size
     cdef int object_size           = model.object_size
     cdef int window                = model.window
+    cdef bint bilinear_form        = model.bilinear_form
 
     # theano variables (with underlying numpy matrices)
     cdef REAL_t *projection_matrix = <REAL_t *>(np.PyArray_DATA(model.projection_matrix.get_value(borrow=True)))
+    cdef REAL_t *composition_matrix # only used if bilinear form
     cdef REAL_t *bias_vector       = <REAL_t *>(np.PyArray_DATA(model.bias_vector.get_value(borrow=True)))
     cdef REAL_t *model_matrix      = <REAL_t *>(np.PyArray_DATA(model.model_matrix.get_value(borrow=True)))
     cdef REAL_t *object_matrix     = <REAL_t *>(np.PyArray_DATA(model.object_matrix.get_value(borrow=True)))
@@ -462,13 +678,21 @@ def predict_sentence_window(model,
     cdef REAL_t *distribution_work = <REAL_t *>(np.PyArray_DATA(_distribution_work))
     cdef np.ndarray _observation_work = np.zeros(observation_size, dtype = REAL)
     cdef REAL_t *observation_work  = <REAL_t *>(np.PyArray_DATA(_observation_work))
+    cdef REAL_t *composition_work # only used if bilinear form
+    cdef np.ndarray _composition_work # only used if bilinear form
 
     # prediction inputs:
     cdef INT_t * indices        = <INT_t *>(np.PyArray_DATA(_indices))
-
     create_observation_vector(indices, &object_index, &window, &size, &object_size, model_matrix, object_matrix, observation_work)
 
-    make_prediction_no_error(&observation_size, &target_size, distribution_sizes, &num_softmax_classes, &num_sigmoid_classes, projection_matrix, bias_vector, observation_work, distribution_work)
+    if bilinear_form:
+        # save prediction except bilinear form is added along with a work matrix for doing calculations:
+        composition_matrix = <REAL_t *>(np.PyArray_DATA(model.composition_matrix.get_value(borrow=True)))
+        _composition_work = np.zeros([target_size, observation_size], dtype = REAL)
+        composition_work = <REAL_t *>(np.PyArray_DATA(_composition_work))
+        make_prediction_no_error_bilinear(&observation_size, &target_size, distribution_sizes, &num_softmax_classes, &num_sigmoid_classes, projection_matrix, composition_matrix, composition_work, bias_vector, observation_work, distribution_work)
+    else:
+        make_prediction_no_error(&observation_size, &target_size, distribution_sizes, &num_softmax_classes, &num_sigmoid_classes, projection_matrix, bias_vector, observation_work, distribution_work)
 
     cdef np.ndarray _softmax_predictions = np.zeros(num_softmax_classes, dtype = np.int32)
     cdef INT_t * softmax_predictions = <INT_t *>np.PyArray_DATA(_softmax_predictions)
@@ -495,9 +719,11 @@ def predict_distribution_sentence_window(model,
     cdef int size                  = model.size
     cdef int object_size           = model.object_size
     cdef int window                = model.window
+    cdef bint bilinear_form        = model.bilinear_form
 
     # theano variables (with underlying numpy matrices)
     cdef REAL_t *projection_matrix = <REAL_t *>(np.PyArray_DATA(model.projection_matrix.get_value(borrow=True)))
+    cdef REAL_t *composition_matrix # only used if bilinear form
     cdef REAL_t *bias_vector       = <REAL_t *>(np.PyArray_DATA(model.bias_vector.get_value(borrow=True)))
     cdef REAL_t *model_matrix      = <REAL_t *>(np.PyArray_DATA(model.model_matrix.get_value(borrow=True)))
     cdef REAL_t *object_matrix     = <REAL_t *>(np.PyArray_DATA(model.object_matrix.get_value(borrow=True)))
@@ -516,15 +742,65 @@ def predict_distribution_sentence_window(model,
     cdef REAL_t *distribution_work = <REAL_t *>(np.PyArray_DATA(_distribution_work))
     cdef np.ndarray _observation_work = np.zeros(observation_size, dtype = REAL)
     cdef REAL_t *observation_work  = <REAL_t *>(np.PyArray_DATA(_observation_work))
+    cdef REAL_t *composition_work # only used if bilinear form
+    cdef np.ndarray _composition_work # only used if bilinear form
 
     # prediction inputs:
     cdef INT_t * indices        = <INT_t *>(np.PyArray_DATA(_indices))
 
     create_observation_vector(indices, &object_index, &window, &size, &object_size, model_matrix, object_matrix, observation_work)
 
-    make_prediction_no_error(&observation_size, &target_size, distribution_sizes, &num_softmax_classes, &num_sigmoid_classes, projection_matrix, bias_vector, observation_work, distribution_work)
+    if bilinear_form:
+        # save prediction except bilinear form is added along with a work matrix for doing calculations:
+        composition_matrix = <REAL_t *>(np.PyArray_DATA(model.composition_matrix.get_value(borrow=True)))
+        _composition_work = np.zeros([target_size, observation_size], dtype = REAL)
+        composition_work = <REAL_t *>(np.PyArray_DATA(_composition_work))
+        make_prediction_no_error_bilinear(&observation_size, &target_size, distribution_sizes, &num_softmax_classes, &num_sigmoid_classes, projection_matrix, composition_matrix, composition_work, bias_vector, observation_work, distribution_work)
+    else:
+        make_prediction_no_error(&observation_size, &target_size, distribution_sizes, &num_softmax_classes, &num_sigmoid_classes, projection_matrix, bias_vector, observation_work, distribution_work)
 
     return _distribution_work
+
+cdef REAL_t train_sentence_concatenation_window_bilinear(
+    const REAL_t * alpha,
+    REAL_t *projection_matrix,
+    REAL_t *composition_matrix,
+    REAL_t *bias_vector,
+    REAL_t *model_matrix,
+    REAL_t *object_matrix,
+    REAL_t *observation_work,
+    REAL_t *distribution_work,
+    REAL_t *composition_work,
+    LABEL_INT *distribution_sizes,
+    INT_t * softmax_target,
+    INT_t * sigmoid_target,
+    const int * softmax_target_size,
+    const int * num_softmax_classes,
+    const int * num_sigmoid_classes,
+    const int * observation_size,
+    const int * size,
+    const int * object_size,
+    const int * window,
+    INT_t * indices,
+    int * object_index) nogil:
+
+    cdef int target_size = softmax_target_size[0] + num_sigmoid_classes[0]
+    cdef REAL_t total_error = 0.
+    memset(distribution_work, 0, target_size * cython.sizeof(REAL_t))
+
+    create_observation_vector(indices, object_index, window, size, object_size, model_matrix, object_matrix, observation_work)
+
+    make_prediction_bilinear(observation_size, &target_size, distribution_sizes, softmax_target, sigmoid_target, num_softmax_classes, num_sigmoid_classes, projection_matrix, composition_matrix, composition_work, bias_vector, observation_work, distribution_work, &total_error)
+
+    obtain_delta_class(softmax_target, sigmoid_target, num_softmax_classes, num_sigmoid_classes, distribution_sizes, distribution_work)
+
+    update_bias_vector(&target_size, bias_vector, alpha, distribution_work)
+    update_projection_matrix(observation_size, &target_size, projection_matrix, alpha, observation_work, distribution_work)
+    update_composition_matrix(observation_size, &target_size, composition_matrix, alpha,  observation_work, composition_work, distribution_work)
+
+    update_language_model_bilinear(observation_size, &target_size, size, object_size, window, indices, object_index, projection_matrix, composition_matrix, model_matrix, object_matrix, alpha, distribution_work, composition_work, observation_work)
+
+    return total_error
 
 cdef REAL_t train_sentence_concatenation_window(
     const REAL_t * alpha,

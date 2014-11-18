@@ -260,6 +260,7 @@ class ObjectLM(object):
                  output_labels = [],
                  output_sigmoid_classes = 4,
                  output_sigmoid_labels = [],
+                 update_fun = False,
                  concatenate = True,
                  alpha = 0.035,
                  bilinear_form = False, # not support by cython yet.
@@ -290,7 +291,7 @@ class ObjectLM(object):
         self.indexed_params = []
         
         self.create_shared_variables()
-        self._create_update_fun()
+        if update_fun: self._create_update_fun()
     
     def create_shared_variables(self):
         """
@@ -503,13 +504,14 @@ class ObjectLM(object):
             """Train the model, lifting lists of sentences from the jobs queue."""
             observation_work = np.zeros(self.window * self.size + self.object_size, dtype = REAL)
             prediction_work = np.zeros(self.output_size, dtype = REAL)
+            composition_work = np.zeros([max(self.output_size, self.window * self.size + self.object_size), self.window * self.size + self.object_size], dtype = REAL) if self.bilinear_form else None
 
             while True:
                 job = jobs.get()
                 if job is None:  # data finished, exit
                     break
                 # how many words did we train on? out-of-vocabulary (unknown) words do not count
-                error = sum(train_sentence_concatenation(self, sentence, object_index, softmax_target, sigmoid_target, self._alpha, prediction_work, observation_work) for sentence, object_index, softmax_target, sigmoid_target in job)
+                error = sum(train_sentence_concatenation(self, sentence, object_index, softmax_target, sigmoid_target, self._alpha, prediction_work, observation_work, composition_work) for sentence, object_index, softmax_target, sigmoid_target in job)
                 with lock:
                     total_error[0] += error
                     objects_done[0] += len(job)
