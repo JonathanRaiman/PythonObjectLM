@@ -3,7 +3,7 @@ Object Language Model
 
 A language model for documents and words. Train a 1 hidden layer feed forward neural network with document vectors and word vectors as inputs using multiclass and binary labels as targets using softmax and sigmoid activations. Both documents and words are trained through backprop. Words are shared among all documents, while document vectors live in their own embedding. The graph for this neural network is shown below:
 
-![svg](images/objectlm_graph.svg)
+![png](images/objectlm_graph.png)
 
 Eucledian distances between documents are observed to possess fuzzy search properties over all the labels. Using T-SNE we can visualize these embeddings for restaurants in Seattle here:
 
