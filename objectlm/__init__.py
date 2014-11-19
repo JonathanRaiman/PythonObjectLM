@@ -116,6 +116,17 @@ class ObjectLM(object):
             mat = np.load(path  + param.name + ".npy")
             param.set_value(mat)
 
+        if os.path.exists(path + "__dict__.txt"):
+            dict_options = open(path + "__dict__.txt", "rt").read()
+            dict_lines = dict_options.split("\n")
+            for line in dict_lines:
+                if line.startswith("sigmoid_labels"):
+                    sig_labels = [word[1:-1] for word in line[line.find(" ")+2:-1].split(", ")]
+                    if self.output_sigmoid_labels != sig_labels:
+                        assert(len(sig_labels) == len(self.output_sigmoid_labels)), "Different number of saved sigmoid labels"
+                        self.output_sigmoid_labels = sig_labels
+                    break
+
     def reset_weights(self):
         # in the typical case we consider a linear projection of the concatenation
         # or addition of inputs:
