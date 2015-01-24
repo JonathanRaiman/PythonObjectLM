@@ -6,7 +6,7 @@ class HierarchicalObservation:
     def __init__(self, covariance):
         self.covariance = covariance
     
-    def observation_vector(self, positive=[], negative = []):
+    def observation_vector(self, positive=[], negative = [], intensity=0.5):
         """
         Take labels as observations being positive or negative
         and find the indices associated, along with a vector
@@ -27,24 +27,24 @@ class HierarchicalObservation:
         
         """
         return (positive + negative, np.concatenate([
-            np.ones(len(positive)) * 0.5, 
-            np.ones(len(negative)) * -0.5]))
+            np.ones(len(positive)) * intensity, 
+            np.ones(len(negative)) * -intensity]))
     
-    def _calculate_conditional_probabilities(self, y, indices, remaining_indices, singular=False):
+    def _calculate_conditional_probabilities(self, y, indices, remaining_indices, singular=False, intensity=0.5):
         assert len(y) == len(indices), "Not the same observation length as indices"
         probs = np.zeros([len(remaining_indices), 2])
         if singular:
           diagonal_noise = np.eye(len(indices) + 1) * 1e-6
           for k, unseen_index in enumerate(remaining_indices):
-              probs[k, 0] = norm_pdf(np.concatenate([y, [0.5]]),
+              probs[k, 0] = norm_pdf(np.concatenate([y, [intensity]]),
                        self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]] + diagonal_noise)
-              probs[k, 1] = norm_pdf(np.concatenate([y, [-0.5]]),
+              probs[k, 1] = norm_pdf(np.concatenate([y, [-intensity]]),
                        self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]] + diagonal_noise)
         else:
           for k, unseen_index in enumerate(remaining_indices):
-              probs[k, 0] = norm_pdf(np.concatenate([y, [0.5]]),
+              probs[k, 0] = norm_pdf(np.concatenate([y, [intensity]]),
                        self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]])
-              probs[k, 1] = norm_pdf(np.concatenate([y, [-0.5]]),
+              probs[k, 1] = norm_pdf(np.concatenate([y, [-intensity]]),
                        self.covariance[indices + [unseen_index], :][:, indices + [unseen_index]])
         # marginalize probabilities
 
@@ -106,6 +106,7 @@ class HierarchicalObservation:
                                   positive = [], 
                                   negative = [], 
                                   remaining_indices = [],
+                                  intensity = 0.5,
                                   sigma = None,
                                   num_steps = 50,
                                   num_trials = 100,
@@ -138,8 +139,8 @@ class HierarchicalObservation:
             conditional probabilities
             
         """
-        indices, y = self.observation_vector(positive,negative)
-        probs = self._calculate_conditional_probabilities(y, indices, remaining_indices, singular)
+        indices, y = self.observation_vector(positive,negative, intensity=intensity)
+        probs = self._calculate_conditional_probabilities(y, indices, remaining_indices, singular, intensity=intensity)
         
         return (remaining_indices, probs)
     
