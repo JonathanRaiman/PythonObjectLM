@@ -35,7 +35,7 @@ def train_model(path, layers=4, epochs=100, hidden_size = 100, save_frequency=10
         len(index2word), layers, hidden_size, hidden_size, 3, len(index2category),
                                  verbose=True,
                                  rho=0.95,
-                                 memory_sparsity=0.3, theano_mode="FAST_COMPILE")
+                                 memory_sparsity=0.3)
 
     def average_error():
         error = 0.
