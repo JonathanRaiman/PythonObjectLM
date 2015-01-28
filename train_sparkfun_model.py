@@ -1,6 +1,8 @@
 import gzip, pickle
 import sparkfun
 import argparse
+import sys
+sys.setrecursionlimit(50000)
 
 def train_model(path, layers=4, epochs=100, hidden_size = 100, save_frequency=10):
 

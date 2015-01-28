@@ -1,6 +1,8 @@
 import theano, theano.tensor as T, numpy as np
 import theano_lstm
 import pickle
+theano.config.reoptimize_unpickled_function = False
+theano.gof.compilelock.set_lock_status(False)
 
 def to_softmax(x):
     return T.nnet.softmax(x)[0] if x.ndim == 1 else T.nnet.softmax(x.T).T
