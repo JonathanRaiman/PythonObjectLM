@@ -15,11 +15,21 @@ class ProductModel(object):
                  hidden_price_size,
                  price_stack_size,
                  output_vocabulary,
+                 index2word,
+                 word2index,
+                 index2category,
+                 category2index,
                  memory_sparsity = 0.0001,
                  rho = 0.95,
                  verbose=False,
                  theano_mode = "FAST_RUN"):
         
+
+        self.index2word = index2word
+        self.word2index = word2index
+        self.index2category = index2category
+        self.category2index = category2index
+
         self.memory_sparsity= theano.shared(np.float64(memory_sparsity), name="memory_sparsity")
         self.theano_mode = theano_mode
         self.word_size = word_size
@@ -193,6 +203,15 @@ class ProductModel(object):
     def save(self, path):
         with open(path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def steal_params(self, neighbor):
+        for origin, destination in zip(neighbor.model.params + neighbor.price_model.params, self.model.params + self.price_model.params):
+            destination.set_value(origin.get_value())
+
+        self.index2word     = neighbor.index2word
+        self.word2index     = neighbor.word2index
+        self.index2category = neighbor.index2category
+        self.category2index = neighbor.category2index
     
     @staticmethod
     def load(path):

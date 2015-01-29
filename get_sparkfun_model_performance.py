@@ -8,9 +8,8 @@ import time
 
 theano.config.reoptimize_unpickled_function = False
 theano.gof.compilelock.set_lock_status(False)
-theano.config.mode = "FAST_COMPILE"
 
-def test_model(path):
+def test_model(path, unpickle_path = None):
     with gzip.open("saves/sparkfun/products.pkl", "rb") as f:
         stuff = pickle.load(f)
 
@@ -18,15 +17,30 @@ def test_model(path):
     for product_args in stuff:
         product = sparkfun.Product(*product_args)
         products[product.sku] = product
-
-    index2category, category2index, index2word, word2index = sparkfun.create_indices(products)
-    data, codelens, sequence_lengths, prices = sparkfun.create_labeled_dataset(products, index2category, category2index, index2word, word2index, 10)
-
+    
     # Construct a predictive model for pricing and categories
     # as a stacked LSTM system with an MLP on the last hidden
     # state outputting the price as a float:
 
-    product_model = sparkfun.ProductModel.load(path)
+    if unpickle_path is not None:
+        product_model = sparkfun.ProductModel.load(unpickle_path)
+
+        theano.config.unpickle_function = False
+        false_model = sparkfun.ProductModel.load(path)
+
+        product_model.steal_params(false_model)
+
+        del false_model
+    else:
+        product_model = sparkfun.ProductModel.load(path)
+
+    data, codelens, sequence_lengths, prices = sparkfun.create_labeled_dataset(
+        products,
+        product_model.index2category,
+        product_model.category2index,
+        product_model.index2word,
+        product_model.word2index,
+        10)
 
     def average_error():
         error = 0.
@@ -52,6 +66,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '-m', '--model', metavar='Model path', type=str,
         help='Where to load the model from', required = True)
+    parser.add_argument(
+        '-u', '--unpickle', metavar='Unpickle path', default=None, type=str,
+        help='Where to load the model from')
     args = parser.parse_args()
 
-    test_model(args.model)
+    test_model(args.model, args.unpickle)
