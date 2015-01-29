@@ -8,6 +8,7 @@ import time
 
 theano.config.reoptimize_unpickled_function = False
 theano.gof.compilelock.set_lock_status(False)
+theano.config.mode = "FAST_COMPILE"
 
 def test_model(path):
     with gzip.open("saves/sparkfun/products.pkl", "rb") as f:
@@ -17,7 +18,6 @@ def test_model(path):
     for product_args in stuff:
         product = sparkfun.Product(*product_args)
         products[product.sku] = product
-
 
     index2category, category2index, index2word, word2index = sparkfun.create_indices(products)
     data, codelens, sequence_lengths, prices = sparkfun.create_labeled_dataset(products, index2category, category2index, index2word, word2index, 10)
