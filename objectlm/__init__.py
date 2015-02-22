@@ -258,20 +258,19 @@ class ObjectLM(object):
                 parameters_hash[key] = value
 
         def deserialize_text_list(text):
-            return [l for l in text[1:-1].split("'") if "," not in l and len(l) > 0]
+            return [l for l in text.strip()[1:-1].split("'") if "," not in l and len(l) > 0]
 
-        output_classes = list(map(int, parameters_hash["output_classes"][1:-1].split(", ")))
-
+        output_classes = list(map(int, parameters_hash["output_classes"].strip()[1:-1].split(", ")))
         model = cls(
             vocabulary = vocabulary,
             object_vocabulary_size = int(parameters_hash["object_vocabulary_size"]),
             window = int(parameters_hash["window"]),
-            bilinear_form = parameters_hash["bilinear_form"].lower().startswith("f"),
+            bilinear_form = parameters_hash["bilinear_form"].lower().startswith("t"),
             size = int(parameters_hash["size"]),
             object_size = int(parameters_hash["object_size"]),
             output_sigmoid_classes = int(parameters_hash["output_sigmoid_classes"]),
-            output_sigmoid_labels = deserialize_text_list(parameters_hash["output_sigmoid_labels"]),
-            output_labels = [deserialize_text_list(parameters_hash["softmax_labels_%d"]) % (i+1) for i in range(len(output_classes))],
+            output_sigmoid_labels = deserialize_text_list(parameters_hash["sigmoid_labels"]),
+            output_labels = [deserialize_text_list(parameters_hash["softmax_labels_%d" % i])  for i in range(len(output_classes))],
             output_classes= output_classes)
         return model
 
