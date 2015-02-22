@@ -19,8 +19,8 @@ except ImportError:
     def predict_distribution_sentence_window(*args):
         raise NotImplementedError(err_msg)
 
-from gensim import utils as gensim_utils
 from queue import Queue
+import itertools
 from numpy import float32 as REAL, int32 as INT
 logger = logging.getLogger("objectlm.training")
 
@@ -75,6 +75,24 @@ except ImportError:
 
     def create_shared(x, name=""):
         return SharedVariable(x, name=name)
+
+
+def grouper(iterable, chunksize):
+    """
+    Return elements from the iterable in `chunksize`-ed lists. The last returned
+    element may be smaller (if length of collection is not divisible by `chunksize`).
+
+    >>> print(list(grouper(range(10), 3)))
+    [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+
+    """
+    it = iter(iterable)
+    while True:
+        wrapped_chunk = [list(itertools.islice(it, int(chunksize)))]
+        if not wrapped_chunk[0]:
+            break
+        # memory opt: wrap the chunk and then pop(), to avoid leaving behind a dangling reference
+        yield wrapped_chunk.pop()
 
 
 class ObjectLM(object):
@@ -645,7 +663,7 @@ class ObjectLM(object):
 
         # convert input strings to Vocab objects (or None for OOV words), and start filling the jobs queue
         no_oov = ((np.array([self.vocab.get_index(word) for word in sentence], dtype = INT), object_index, softmax_target, sigmoid_target) for sentence, object_index, softmax_target, sigmoid_target in texts)
-        for job_no, job in enumerate(gensim_utils.grouper(no_oov, chunksize)):
+        for job_no, job in enumerate(grouper(no_oov, chunksize)):
             logger.debug("putting job #%i in the queue, qsize=%i" % (job_no, jobs.qsize()))
             jobs.put(job)
         logger.info("reached the end of input; waiting to finish %i outstanding jobs" % jobs.qsize())
