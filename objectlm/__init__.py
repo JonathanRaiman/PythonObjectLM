@@ -1,4 +1,4 @@
-import theano, theano.tensor as T, numpy as np, scipy.io as scipy_io, pyximport, threading, logging, time, sys, os, pickle, gzip, json
+import numpy as np, scipy.io as scipy_io, pyximport, threading, logging, time, sys, os, pickle, gzip, json
 from collections import OrderedDict
 sys.path.append("/Users/jonathanraiman/Desktop/Coding/language_modeling/")
 pyximport.install(setup_args={"include_dirs": np.get_include()})
@@ -10,12 +10,56 @@ logger = logging.getLogger("objectlm.training")
 
 from .hierarchical_observation import HierarchicalObservation
 
-def bilinear_form(tensor, x):
-    """
-    Bilinear form like:
-    x • A • x^T
-    """
-    return T.dot(T.dot(tensor, x), x)
+try:
+    import theano, theano.tensor as T
+
+    def theano_bilinear_form(tensor, x):
+        """
+        Bilinear form like:
+        x • A • x^T
+        """
+        return T.dot(T.dot(tensor, x), x)
+
+    def create_shared(x, name=""):
+        return theano.shared(x, name=name)
+
+except ImportError:
+    print("WARNING: You do not have Theano install, but this is a recommended dependency for ObjectlM")
+
+    class SharedVariable:
+        """
+        Filler class replacing the Theano's shared variable type.
+        """
+        __slots__ = ["value", "name"]
+        def __init__(self, value, name=None, borrow = True):
+            self.value = value if borrow else np.array(value)
+            self.name = name
+
+        @property
+        def dtype(self):
+            return self.value.dtype
+
+        @property
+        def ndim(self):
+            return self.value.ndim
+
+        def __str__(self):
+            return self.name if self.name is not None else "<SharedVariable, ndim=%d, dtype=%r>" % (self.ndim, self.dtype)
+
+        def set_value(self, new_value, borrow=True):
+            if not borrow:
+                self.value = np.array(new_value)
+            else:
+                self.value = new_value
+
+        def get_value(self, borrow=False, return_internal_type=False):
+            if not borrow:
+                return np.array(self.value)
+            return self.value
+
+    def create_shared(x, name=""):
+        return SharedVariable(x, name=name)
+
 
 class ObjectLM(object):
     """
@@ -271,14 +315,14 @@ class ObjectLM(object):
                  output_labels = [],
                  output_sigmoid_classes = 4,
                  output_sigmoid_labels = [],
-                 update_fun = False,
+                 create_theano_functions = False,
                  concatenate = True,
                  alpha = 0.035,
                  bilinear_form = False, # not support by cython yet.
                  theano_mode = 'FAST_RUN', # or FAST_COMPILE
                  batch_size = 100):
         
-        self.alpha = theano.shared(np.float64(alpha).astype(REAL), name = 'alpha')
+        self.alpha = create_shared(np.float64(alpha).astype(REAL), name = 'alpha')
         self._alpha = float(alpha)
         self.output_classes = np.array(output_classes, dtype=INT)
         self.output_sigmoid_classes = output_sigmoid_classes
@@ -302,7 +346,8 @@ class ObjectLM(object):
         self.indexed_params = []
         
         self.create_shared_variables()
-        if update_fun: self._create_update_fun()
+        if create_theano_functions:
+            self.create_theano_functions()
     
     def create_shared_variables(self):
         """
@@ -331,7 +376,7 @@ class ObjectLM(object):
             np.random.randn(
                 self.output_size,
                 projection_size).astype(REAL))
-        self.projection_matrix = theano.shared(proj_matrix, name='projection_matrix')    
+        self.projection_matrix = create_shared(proj_matrix, name='projection_matrix')    
         self.params.append(self.projection_matrix)
         
         # in the case we want to use 2nd order behavior for modeling we add a tensor:
@@ -341,7 +386,7 @@ class ObjectLM(object):
                 self.output_size,
                 projection_size,
                 projection_size)).astype(REAL)
-            self.composition_matrix = theano.shared(random_comp_matrix, name='composition_matrix')
+            self.composition_matrix = create_shared(random_comp_matrix, name='composition_matrix')
             
             self.params.append(self.composition_matrix)
         
@@ -349,19 +394,19 @@ class ObjectLM(object):
         
         # create bias vector:
         bias_vector      = np.zeros(self.output_size, dtype=REAL)
-        self.bias_vector = theano.shared(bias_vector, name='bias_vector')
+        self.bias_vector = create_shared(bias_vector, name='bias_vector')
         self.params.append(self.bias_vector)
         
         model_matrix = ((1.0 / self.size) * \
                         np.random.randn(self.vocabulary_size, self.size)).astype(REAL)
-        self.model_matrix = theano.shared(model_matrix, name='model_matrix')
+        self.model_matrix = create_shared(model_matrix, name='model_matrix')
         self.params.append(self.model_matrix)
         
         self.indexed_params.append(self.model_matrix)
         
         object_matrix = ((1.0 / self.object_size) * \
                         np.random.randn(self.object_vocabulary_size, self.object_size)).astype(REAL)
-        self.object_matrix = theano.shared(object_matrix, name='object_matrix')
+        self.object_matrix = create_shared(object_matrix, name='object_matrix')
         self.params.append(self.object_matrix)
         
         self.indexed_params.append(self.object_matrix)
@@ -409,7 +454,7 @@ class ObjectLM(object):
 
     def projection_fun(self, observation, labels, sigmoid_labels):
         if self.bilinear_form:
-            log_unnormalized_pred = bilinear_form(self.composition_matrix, observation) + T.dot(self.projection_matrix, observation) + self.bias_vector
+            log_unnormalized_pred = theano_bilinear_form(self.composition_matrix, observation) + T.dot(self.projection_matrix, observation) + self.bias_vector
         else:
             log_unnormalized_pred = T.dot(self.projection_matrix, observation)  + self.bias_vector
         
@@ -428,7 +473,7 @@ class ObjectLM(object):
 
         return (preds, prediction, error)
     
-    def _create_update_fun(self):
+    def create_theano_functions(self):
         """
             Given examples of the form:
                 
@@ -442,53 +487,59 @@ class ObjectLM(object):
             the third class active, we can do regression.
             
         """
-        
-        input = T.ivector('input')
-        input_object = T.iscalar('input_object_index')
-        labels = T.ivector('labels')
-        sigmoid_labels = T.ivector('sigmoid_labels')
-        
-        embeddings = self.model_matrix[input]
-        object_embedding = self.object_matrix[input_object]
-        
-        if self.concatenate:
-            # or we concatenate all the words and add the object to it
-            merged_embeddings = T.concatenate([embeddings.ravel(), object_embedding])
-        else:
-            # or we sum all the words and add the object to it:
-            merged_embeddings = embeddings.sum(axis=1) + object_embedding
+        try:
 
-        preds, prediction, error = self.projection_fun(merged_embeddings, labels, sigmoid_labels)
-
-        updates = OrderedDict()
-        
-        gparams = T.grad(error, self.params)
-        
-        for gparam, param in zip(gparams, self.params):
-            if param == self.model_matrix:
-                updates[param] = T.inc_subtensor(param[input], - self.alpha * gparam[input])
-            elif param == self.object_matrix:
-                updates[param] = T.inc_subtensor(param[input_object], - self.alpha * gparam[input_object])
-            else:
-                updates[param] = param - self.alpha * gparam
+            import theano, theano.tensor as T
             
-        self.predict_proba = theano.function([input, input_object], preds + [prediction], mode = self.theano_mode)
-        self.predict = theano.function([input, input_object], [pred.argmax() for pred in preds] + [prediction.round()], mode = self.theano_mode)
+            input = T.ivector('input')
+            input_object = T.iscalar('input_object_index')
+            labels = T.ivector('labels')
+            sigmoid_labels = T.ivector('sigmoid_labels')
+            
+            embeddings = self.model_matrix[input]
+            object_embedding = self.object_matrix[input_object]
+            
+            if self.concatenate:
+                # or we concatenate all the words and add the object to it
+                merged_embeddings = T.concatenate([embeddings.ravel(), object_embedding])
+            else:
+                # or we sum all the words and add the object to it:
+                merged_embeddings = embeddings.sum(axis=1) + object_embedding
 
-        input_vector = T.vector()
-        alt_preds, alt_prediction, alt_error = self.projection_fun(input_vector, labels, sigmoid_labels)
-        self.predict_vector = theano.function([input_vector], [pred.argmax() for pred in alt_preds] + [alt_prediction.round()], mode = self.theano_mode)
+            preds, prediction, error = self.projection_fun(merged_embeddings, labels, sigmoid_labels)
 
-        self.predict_vector_proba = theano.function([input_vector], alt_preds + [alt_prediction], mode = self.theano_mode)
-        
-        training_inputs = []
-        if len(self.output_classes) > 0:
-            training_inputs.append(labels)
-        if self.output_sigmoid_classes > 0:
-            training_inputs.append(sigmoid_labels)
-        
-        self.gradient_fun  = theano.function([input, input_object] + training_inputs, gparams, mode = self.theano_mode)
-        self.update_fun    = theano.function([input, input_object] + training_inputs, error, updates = updates, mode = self.theano_mode)
+            updates = OrderedDict()
+            
+            gparams = T.grad(error, self.params)
+            
+            for gparam, param in zip(gparams, self.params):
+                if param == self.model_matrix:
+                    updates[param] = T.inc_subtensor(param[input], - self.alpha * gparam[input])
+                elif param == self.object_matrix:
+                    updates[param] = T.inc_subtensor(param[input_object], - self.alpha * gparam[input_object])
+                else:
+                    updates[param] = param - self.alpha * gparam
+                
+            self.predict_proba = theano.function([input, input_object], preds + [prediction], mode = self.theano_mode)
+            self.predict = theano.function([input, input_object], [pred.argmax() for pred in preds] + [prediction.round()], mode = self.theano_mode)
+
+            input_vector = T.vector()
+            alt_preds, alt_prediction, alt_error = self.projection_fun(input_vector, labels, sigmoid_labels)
+            self.predict_vector = theano.function([input_vector], [pred.argmax() for pred in alt_preds] + [alt_prediction.round()], mode = self.theano_mode)
+
+            self.predict_vector_proba = theano.function([input_vector], alt_preds + [alt_prediction], mode = self.theano_mode)
+            
+            training_inputs = []
+            if len(self.output_classes) > 0:
+                training_inputs.append(labels)
+            if self.output_sigmoid_classes > 0:
+                training_inputs.append(sigmoid_labels)
+            
+            self.gradient_fun  = theano.function([input, input_object] + training_inputs, gparams, mode = self.theano_mode)
+            self.update_fun    = theano.function([input, input_object] + training_inputs, error, updates = updates, mode = self.theano_mode)
+        except ImportError:
+            print("ERROR: cannot create Theano functions. Please install Theano.")
+            raise
 
     def predict(self, indices, object_index):
         return predict_sentence_window(self, indices, object_index)
