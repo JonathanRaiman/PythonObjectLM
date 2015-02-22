@@ -233,10 +233,13 @@ class ObjectLM(object):
                 f.write( (word + "\n") )
 
     @classmethod
-    def load_model_from_configuration_file(cls, path, vocabulary):
+    def load_from_configuration_file(cls, path, vocabulary):
         """
 
         Load model from its Java "interchange" format
+        ("__dict__.txt" file)
+
+        See `save_model_parameters` for serialization format.
 
         Inputs
         ------
