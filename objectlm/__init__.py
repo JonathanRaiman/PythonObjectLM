@@ -276,6 +276,48 @@ class ObjectLM(object):
             for word in self.vocab.index2word:
                 f.write( (word + "\n") )
 
+    @classmethod
+    def load_from_configuration_file(cls, path, vocabulary):
+        """
+
+        Load model from its Java "interchange" format
+        ("__dict__.txt" file)
+
+        See `save_model_parameters` for serialization format.
+
+        Inputs
+        ------
+
+        str path: the path to the directory the parameters are stored.
+
+        """
+        if not path.endswith("/"): path = path + "/"
+        if not os.path.exists(path):
+            raise Exception("Path \"" + path +"\" does not exist, cannot load model.")
+
+        parameters_hash = {}
+        with open(path + "__dict__.txt", "rt") as f:
+            for line in f:
+                key, value = line.split(" ", 1)
+                parameters_hash[key] = value
+
+        def deserialize_text_list(text):
+            return [l for l in text.strip()[1:-1].split("'") if "," not in l and len(l) > 0]
+
+        output_classes = list(map(int, parameters_hash["output_classes"].strip()[1:-1].split(", ")))
+        model = cls(
+            vocabulary = vocabulary,
+            object_vocabulary_size = int(parameters_hash["object_vocabulary_size"]),
+            window = int(parameters_hash["window"]),
+            bilinear_form = parameters_hash["bilinear_form"].lower().startswith("t"),
+            size = int(parameters_hash["size"]),
+            object_size = int(parameters_hash["object_size"]),
+            output_sigmoid_classes = int(parameters_hash["output_sigmoid_classes"]),
+            output_sigmoid_labels = deserialize_text_list(parameters_hash["sigmoid_labels"]),
+            output_labels = [deserialize_text_list(parameters_hash["softmax_labels_%d" % i])  for i in range(len(output_classes))],
+            output_classes= output_classes)
+        return model
+
     def save_model_to_java(self, path):
         """
 
