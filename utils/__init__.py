@@ -1,7 +1,6 @@
 from IPython.display import display, HTML
 import re
 from xml_cleaner import to_raw_text
-from pymongo import MongoClient
 from math import ceil
 import numpy as np
 
@@ -9,6 +8,7 @@ mongo_database_global = None
 mongo_client_global   = None
 
 def get_mongo_client(hostname = 'localhost', port = 27017):
+    from pymongo import MongoClient
     global mongo_client_global
     mongo_client_global = MongoClient(hostname, port)
 
