@@ -26,12 +26,18 @@ class HierarchicalObservation:
                 in the correct order for the observation.
         
         """
-        return (positive + negative, np.concatenate([
+        if type(positive) is set and type(negative) is set:
+          return (positive | negative, np.concatenate([
+            np.ones(len(positive)) * intensity, 
+            np.ones(len(negative)) * -intensity]))
+        else:
+          return (positive + negative, np.concatenate([
             np.ones(len(positive)) * intensity, 
             np.ones(len(negative)) * -intensity]))
     
     def _calculate_conditional_probabilities(self, y, indices, remaining_indices, singular=False, intensity=0.5):
         assert len(y) == len(indices), "Not the same observation length as indices"
+        print(remaining_indices)
         probs = np.zeros([len(remaining_indices), 2])
         if singular:
           diagonal_noise = np.eye(len(indices) + 1) * 1e-6

@@ -17,7 +17,6 @@ class Personality:
         
     def _random_sample(self):
         database = DB[self.collection_name]
-        
         all_elements = database.count()
         random_el = random.randint(0, all_elements)
         els = list(database.find({"review_count": {"$gt": 4}}, {"url": 1,"rating":1, "price": 1, "categories":1}, limit=1, skip=random_el))
